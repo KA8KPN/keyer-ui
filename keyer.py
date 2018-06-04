@@ -14,8 +14,7 @@ while True:
     if "" == line:
         break
     else:
-        (c, error) = decoder.one_symbol(line)
-        if not error:
+        c = decoder.one_symbol(line)
+        if c is not None:
             stdout.write(c)
-        else:
-            print("\n***ERROR***")
+            stdout.flush()

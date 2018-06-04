@@ -90,35 +90,29 @@ def build_morse_decode_table(morse_table):
 
 build_morse_decode_table(morse_table)
 
-print(morse_decode_table)
+# print(morse_decode_table)
 
 class MorseDecoder:
     def __init__(self):
         self.__decode_state = morse_decode_table
 
     def one_symbol(self, s):
-        error = False
         decoded = None
         len = int(s[1:])
         if 'u' == s[0]:
-            decoded = self.__decode_state['char']
             if len > 20:
-                if None != decoded:
+                decoded = self.__decode_state['char']
+                if decoded is not None:
                     if len > 50:
                         decoded = decoded + ' '
-                else:
-                    error = True
                 self.__decode_state = morse_decode_table
         else:
             if len > 20:
                 self.__decode_state = self.__decode_state['dah']
             else:
                 self.__decode_state = self.__decode_state['dit']
-            if None != self.__decode_state:
-                decoded = self.__decode_state['char']
-            else:
-                error = True
+            if self.__decode_state is None:
                 self.__decode_state = morse_decode_table
 
-        return (decoded, error)
+        return decoded
                 
