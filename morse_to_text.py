@@ -123,8 +123,8 @@ class MorseDecoder:
                 
 
 class MorseEncoder:
-    def __init__(self, port):
-        self.port = port
+    def __init__(self, xmit_queue):
+        self.xmit_queue = xmit_queue
         self.encode_table = {}
         for i in morse_table:
             self.encode_table[i['c']] = i['s']
@@ -133,18 +133,20 @@ class MorseEncoder:
         print(self.encode_table)
 
     def one_letter(self, xmitter, s):
-        if s in self.encode_table:
+        if s.isspace():
+            self.xmit_queue.put(('u:%d:40\r\n' % xmitter).encode('ascii'))
+        elif s in self.encode_table:
             p = self.encode_table[s]
             for i in p:
                 if i.islower():
-                    self.port.write(('d:%d:10\r\n' % xmitter).encode('ascii'))
-                    print("Sent     the line '%s'" % ('d:%d:10' % xmitter))
+                    self.xmit_queue.put(('d:%d:10\r\n' % xmitter).encode('ascii'))
+                    # print("Sent     the line '%s'" % ('d:%d:10' % xmitter))
                 else:
-                    self.port.write(('d:%d:30\r\n' % xmitter).encode('ascii'))
-                    print("Sent     the line '%s'" % ('d:%d:30' % xmitter))
-                self.port.write(('u:%d:10\r\n' % xmitter).encode('ascii'))
-                print("Sent     the line '%s'" % ('u:%d:10' % xmitter))
-            self.port.write(('u:%d:20\r\n' % xmitter).encode('ascii'))
-            print("Sent     the line '%s'" % ('u:%d:20' % xmitter))
+                    self.xmit_queue.put(('d:%d:30\r\n' % xmitter).encode('ascii'))
+                    # print("Sent     the line '%s'" % ('d:%d:30' % xmitter))
+                self.xmit_queue.put(('u:%d:10\r\n' % xmitter).encode('ascii'))
+                # print("Sent     the line '%s'" % ('u:%d:10' % xmitter))
+            self.xmit_queue.put(('u:%d:20\r\n' % xmitter).encode('ascii'))
+            # print("Sent     the line '%s'" % ('u:%d:20' % xmitter))
         else:
             print("Character %s not found" % s)
