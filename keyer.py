@@ -8,10 +8,11 @@ import threading
 from sys import stdout
 import serial
 # import io
-from morse_to_text import MorseDecoder
+from morse_to_text import MorseDecoder, MorseEncoder
 
 class mainWindow(tkinter.ttk.Frame):
-    def __init__(self, top, **kwargs):
+    def __init__(self, top, encoder, **kwargs):
+        self.encoder = encoder
         super().__init__(top)
         top.rowconfigure(0, weight=1)
         top.columnconfigure(0, weight=1)
@@ -31,6 +32,9 @@ class mainWindow(tkinter.ttk.Frame):
         # 0x08 & event.state is ALT
         if (0 != 0x08 & event.state) and ('q' == event.char):
             quit()
+        if (16 == 0xfe & event.state):
+            self.encoder.one_letter(1, event.char)
+
 
 class commThread(threading.Thread):
     def __init__(self, threadId, port, decoder, window):
@@ -51,19 +55,22 @@ class commThread(threading.Thread):
                 # break
                 pass
             else:
+                print("Received the line '%s'" % line)
                 c = self.decoder.one_symbol(line)
                 if c is not None:
                     self.window.addChar(c)
                     # stdout.write(c)
                     # stdout.flush()
 
+port = serial.Serial('/dev/ttyUSB0', 115200, timeout=30, xonxoff=True)
+# sio = io.TextIOWrapper(io.BufferedRWPair(port, port))
+
+decoder = MorseDecoder()
+encoder = MorseEncoder(port)
+
 top = tkinter.Tk()
 top.title = "Memory Keyer"
-frame = mainWindow(top, padding="3 3 12 12")
-
-port = serial.Serial('/dev/ttyUSB0', 115200, timeout=30)
-# sio = io.TextIOWrapper(io.BufferedRWPair(port, port))
-decoder = MorseDecoder()
+frame = mainWindow(top, encoder, padding="3 3 12 12")
 
 thread1 = commThread(1, port, decoder, frame)
 thread1.start()

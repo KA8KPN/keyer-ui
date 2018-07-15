@@ -96,17 +96,22 @@ class MorseDecoder:
     def __init__(self):
         self.__decode_state = morse_decode_table
 
+    # The key up and key down symbols, the significant ones from here, are
     def one_symbol(self, s):
         decoded = None
-        len = int(s[1:])
-        if 'u' == s[0]:
+        parts = s.split(':')
+        if 'u' == parts[0]:
+            xmitter = int(parts[1])
+            len = int(parts[2])
             if len > 20:
                 decoded = self.__decode_state['char']
                 if decoded is not None:
                     if len > 50:
                         decoded = decoded + ' '
                 self.__decode_state = morse_decode_table
-        else:
+        elif 'd' == parts[0]:
+            xmitter = int(parts[1])
+            len = int(parts[2])
             if len > 20:
                 self.__decode_state = self.__decode_state['dah']
             else:
@@ -116,3 +121,30 @@ class MorseDecoder:
 
         return decoded
                 
+
+class MorseEncoder:
+    def __init__(self, port):
+        self.port = port
+        self.encode_table = {}
+        for i in morse_table:
+            self.encode_table[i['c']] = i['s']
+            if i['lc']:
+                self.encode_table[i['c'].lower()] = i['s']
+        print(self.encode_table)
+
+    def one_letter(self, xmitter, s):
+        if s in self.encode_table:
+            p = self.encode_table[s]
+            for i in p:
+                if i.islower():
+                    self.port.write(('d:%d:10\r\n' % xmitter).encode('ascii'))
+                    print("Sent     the line '%s'" % ('d:%d:10' % xmitter))
+                else:
+                    self.port.write(('d:%d:30\r\n' % xmitter).encode('ascii'))
+                    print("Sent     the line '%s'" % ('d:%d:30' % xmitter))
+                self.port.write(('u:%d:10\r\n' % xmitter).encode('ascii'))
+                print("Sent     the line '%s'" % ('u:%d:10' % xmitter))
+            self.port.write(('u:%d:20\r\n' % xmitter).encode('ascii'))
+            print("Sent     the line '%s'" % ('u:%d:20' % xmitter))
+        else:
+            print("Character %s not found" % s)
