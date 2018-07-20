@@ -29,9 +29,9 @@ class mainWindow(tkinter.ttk.Frame):
         self.ta.insert("end", c)
 
     def getout(self, event):
-        print("Char:   '%s'" % event.char)
-        print("Keysym: '%s'" % event.keysym)
-        print("State:  '%s'" % event.state)
+        # print("Char:   '%s'" % event.char)
+        # print("Keysym: '%s'" % event.keysym)
+        # print("State:  '%s'" % event.state)
         # 0x08 & event.state is ALT
         if (0 != 0x08 & event.state) and ('q' == event.char):
             quit()
@@ -56,16 +56,13 @@ class xmitThread(threading.Thread):
             if self.xon:
                 item = self.xmit_queue.get()
                 self.port.write(item)
-                print("Sent     the line '%s'" % item)
+                # print("Sent     the line '%s'" % item)
+                self.xon = False
             else:
-                time.sleep(0.1)
-
-    def pause(self):
-        print("Pausing")
-        self.xon = False
+                time.sleep(0.01)
 
     def resume(self):
-        print("Resuming")
+        # print("Resuming")
         self.xon = True
 
 
@@ -88,12 +85,10 @@ class recvThread(threading.Thread):
             if "" == line:
                 # break
                 pass
-            elif 'xoff:0' == line:
-                self.xmitter.pause()
-            elif 'xon:0' == line:
+            elif 'x' == line:
                 self.xmitter.resume()
             else:
-                print("Received the line '%s'" % line)
+                # print("Received the line '%s'" % line)
 
                 c = self.decoder.one_symbol(line)
                 if c is not None:
