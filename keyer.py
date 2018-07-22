@@ -39,6 +39,9 @@ class mainWindow(tkinter.ttk.Frame):
             self.encoder.one_letter(1, event.char)
 
 
+# Note:  If I'm going to allow the system to drive multiple transmitters
+# simultaneously, I'm going to have to work out a mechanism for dealing
+# with multiple transmit queues, one per transmitter
 class xmitThread(threading.Thread):
     def __init__(self, threadId, port, xmit_queue):
         threading.Thread.__init__(self)
@@ -55,15 +58,26 @@ class xmitThread(threading.Thread):
         while self.continueThread:
             if self.xon:
                 item = self.xmit_queue.get()
+                self.acknowledged = False
                 self.port.write(item)
                 # print("Sent     the line '%s'" % item)
-                self.xon = False
+                while not self.acknowledged:
+                    time.sleep(0.01)
             else:
-                time.sleep(0.01)
+                time.sleep(0.1)
 
-    def resume(self):
-        # print("Resuming")
+    def pause(self, xmitter):
+        # print("Pausing transmitter %d" % xmitter)
+        self.xon = False
+
+    def resume(self, xmitter):
+        # print("Resuming transmitter %d" % xmitter)
         self.xon = True
+
+    # Means the receiver got the message
+    def acknowledge(self):
+        # print("message acknowledged")
+        self.acknowledged = True
 
 
 class recvThread(threading.Thread):
@@ -81,12 +95,20 @@ class recvThread(threading.Thread):
 
     def run(self):
         while self.continueThread:
-            line = self.port.readline().decode('ascii').strip()
-            if "" == line:
+            line = self.port.readline().decode('ascii').strip().split(':')
+            # print("Received the line '%s'" % ':'.join(line))
+            # print("The first part is '%s'" % line[0])
+            if "" == line[0]:
                 # break
                 pass
-            elif 'x' == line:
-                self.xmitter.resume()
+            elif 'a' == line[0]:
+                self.xmitter.acknowledge()
+            elif 'xon' == line[0]:
+                # print("Receiver attempting to resume the transmitter")
+                self.xmitter.resume(int(line[1]))
+            elif 'xoff' == line[0]:
+                # print("Receiver attempting to pause the transmitter")
+                self.xmitter.pause(int(line[1]))
             else:
                 # print("Received the line '%s'" % line)
 

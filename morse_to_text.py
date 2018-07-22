@@ -97,9 +97,8 @@ class MorseDecoder:
         self.__decode_state = morse_decode_table
 
     # The key up and key down symbols, the significant ones from here, are
-    def one_symbol(self, s):
+    def one_symbol(self, parts):
         decoded = None
-        parts = s.split(':')
         if 'u' == parts[0]:
             xmitter = int(parts[1])
             len = int(parts[2])
