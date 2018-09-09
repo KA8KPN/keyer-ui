@@ -31,10 +31,36 @@ class MemoryButtons(tkinter.ttk.Frame):
 class TopBar(tkinter.ttk.Frame):
     def __init__(self, master, **kwargs):
         super(TopBar, self).__init__(master, **kwargs)
+        self.left = tkinter.ttk.Label(self, text="Left")
+        self.right = tkinter.ttk.Label(self, text="Right")
+        self.center = tkinter.ttk.Frame(self, relief="ridge")
+        self.left.grid(padx=2, column=0, row=0)
+        self.center.grid(padx=2, column=1, row=0)
+        self.right.grid(padx=2, column=2, row=0)
+        self.wpmPlus = tkinter.ttk.Button(self.center, text="+")
+        self.wpmMinus = tkinter.ttk.Button(self.center, text="-")
+        self.wpm = tkinter.ttk.Label(self.center, text="WPM")
+        self.wpmPlus.grid(column=2, row=0)
+        self.wpm.grid(column=1, row=0)
+        self.wpmMinus.grid(column=0, row=0)
+
+class TransmitterButton(tkinter.ttk.Button):
+    def __init__(self, master, **kwargs):
+        super(TransmitterButton, self).__init__(master, **kwargs)
 
 class TransmitterButtons(tkinter.ttk.Frame):
     def __init__(self, master, **kwargs):
         super(TransmitterButtons, self).__init__(master, **kwargs)
+        self.nw = tkinter.ttk.Button(self, text="Transmitter\n1")
+        self.ne = tkinter.ttk.Button(self, text="Transmitter\n2")
+        self.sw = tkinter.ttk.Button(self, text="Transmitter\n3")
+        self.se = tkinter.ttk.Button(self, text="Transmitter\n4")
+        self.columnconfigure(0, weight=1)
+        self.columnconfigure(1, weight=1)
+        self.nw.grid(padx=10, pady=10, column=0, row=0, sticky=(tkinter.N, tkinter.S, tkinter.E, tkinter.W))
+        self.ne.grid(padx=10, pady=10, column=1, row=0, sticky=(tkinter.N, tkinter.S, tkinter.E, tkinter.W))
+        self.sw.grid(padx=10, pady=10, column=0, row=1, sticky=(tkinter.N, tkinter.S, tkinter.E, tkinter.W))
+        self.se.grid(padx=10, pady=10, column=1, row=1, sticky=(tkinter.N, tkinter.S, tkinter.E, tkinter.W))
 
 
 # NOTE:  The display I want to configure for is 1024x600 pixels
@@ -52,8 +78,8 @@ class mainWindow(tkinter.ttk.Frame):
         self.right.grid(row=0, column=2, rowspan=3, sticky=(tkinter.N, tkinter.S))
         self.topBar = TopBar(self)
         self.topBar.grid(row=0, column=1)
-        self.xmitters = TransmitterButtons(self)
-        self.xmitters.grid(row=1, column=1)
+        self.xmitters = TransmitterButtons(self, relief="groove")
+        self.xmitters.grid(pady=5, row=1, column=1, sticky=(tkinter.E, tkinter.W))
         self.ta = tkinter.scrolledtext.ScrolledText(self)
         self.ta.grid(row=2, column=1)
         self.bind_all('<Alt-Key-q>', self.getout)
