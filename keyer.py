@@ -17,6 +17,12 @@ class MemoryButton(tkinter.ttk.Button):
         super(MemoryButton, self).__init__(master, **kwargs)
         # print(self.text)
 
+    def read_config(self):
+        pass
+
+    def write_config(self, config):
+        pass
+
 class MemoryButtons(tkinter.ttk.Frame):
     def __init__(self, master, startCount, numButtons, **kwargs):
         super(MemoryButtons, self).__init__(master, **kwargs)
@@ -28,39 +34,96 @@ class MemoryButtons(tkinter.ttk.Frame):
             b.grid(column=0, row=i, padx=2, pady=2, sticky=(tkinter.N, tkinter.S))
             self.buttons.append(b)
 
+    def read_config(self):
+        pass
+
+    def write_config(self, config):
+        pass
+
 class TopBar(tkinter.ttk.Frame):
     def __init__(self, master, **kwargs):
         super(TopBar, self).__init__(master, **kwargs)
-        self.left = tkinter.ttk.Label(self, text="Left")
-        self.right = tkinter.ttk.Label(self, text="Right")
-        self.center = tkinter.ttk.Frame(self, relief="ridge")
-        self.left.grid(padx=2, column=0, row=0)
-        self.center.grid(padx=2, column=1, row=0)
-        self.right.grid(padx=2, column=2, row=0)
-        self.wpmPlus = tkinter.ttk.Button(self.center, text="+")
-        self.wpmMinus = tkinter.ttk.Button(self.center, text="-")
-        self.wpm = tkinter.ttk.Label(self.center, text="WPM")
+        self.left = tkinter.ttk.Label(self, text="Paddle Mode:  Iambic-A")
+        self.right = tkinter.ttk.Frame(self, relief="ridge")
+        self.columnconfigure(0, weight=1)
+        self.columnconfigure(1, weight=1)
+        self.left.grid(padx=2, column=0, row=0, sticky=(tkinter.W))
+        self.right.grid(padx=2, column=1, row=0, sticky=(tkinter.E))
+        self.wpmPlus = tkinter.ttk.Button(self.right, text="+")
+        self.wpmMinus = tkinter.ttk.Button(self.right, text="-")
+        self.wpm = tkinter.ttk.Label(self.right, text="18 WPM")
         self.wpmPlus.grid(column=2, row=0)
         self.wpm.grid(column=1, row=0)
         self.wpmMinus.grid(column=0, row=0)
 
+    def read_config(self):
+        pass
+
+    def write_config(self, config):
+        pass
+
 class TransmitterButton(tkinter.ttk.Button):
-    def __init__(self, master, **kwargs):
+    def __init__(self, master, which, stylename, **kwargs):
         super(TransmitterButton, self).__init__(master, **kwargs)
+        self.master = master
+        self.which = which
+        self.stylename = stylename
+        self.bind('<Button-1>', self.clicked)
+
+    def read_config(self):
+        pass
+
+    def write_config(self, config):
+        pass
+
+    def picked(self):
+        style.configure(self.stylename, background='lightgreen')
+        style.map(self.stylename, background=[('active', 'lightgreen')])
+        # self.master.select(which)
+        pass
+
+    def not_picked(self):
+        style.map(self.stylename, background=[('active', 'red')])
+        style.configure(self.stylename, background='red')
+        pass
+
+    def clicked(self, foo):
+        self.master.select(self.which)
 
 class TransmitterButtons(tkinter.ttk.Frame):
     def __init__(self, master, **kwargs):
         super(TransmitterButtons, self).__init__(master, **kwargs)
-        self.nw = tkinter.ttk.Button(self, text="Transmitter\n1")
-        self.ne = tkinter.ttk.Button(self, text="Transmitter\n2")
-        self.sw = tkinter.ttk.Button(self, text="Transmitter\n3")
-        self.se = tkinter.ttk.Button(self, text="Transmitter\n4")
+        self.selected_button = 0
+        self.buttons = []
+        global style
+        style = tkinter.ttk.Style()
+        for i in range(4):
+            stylename = "xmit_button%d.TButton" % i
+            style.configure(stylename, foreground='black', background='red', relief='sunken')
+            style.map(stylename, background=[('active', 'red')], relief=[('active', 'raised')])
+            self.buttons.append(TransmitterButton(self, i, stylename, text="Transmitter\n%d" % (i+1), style=stylename))
         self.columnconfigure(0, weight=1)
         self.columnconfigure(1, weight=1)
-        self.nw.grid(padx=10, pady=10, column=0, row=0, sticky=(tkinter.N, tkinter.S, tkinter.E, tkinter.W))
-        self.ne.grid(padx=10, pady=10, column=1, row=0, sticky=(tkinter.N, tkinter.S, tkinter.E, tkinter.W))
-        self.sw.grid(padx=10, pady=10, column=0, row=1, sticky=(tkinter.N, tkinter.S, tkinter.E, tkinter.W))
-        self.se.grid(padx=10, pady=10, column=1, row=1, sticky=(tkinter.N, tkinter.S, tkinter.E, tkinter.W))
+        self.rowconfigure(0, weight=1)
+        self.rowconfigure(1, weight=1)
+        self.buttons[0].grid(padx=10, pady=10, column=0, row=0, sticky=(tkinter.N, tkinter.S, tkinter.E, tkinter.W))
+        self.buttons[1].grid(padx=10, pady=10, column=1, row=0, sticky=(tkinter.N, tkinter.S, tkinter.E, tkinter.W))
+        self.buttons[2].grid(padx=10, pady=10, column=0, row=1, sticky=(tkinter.N, tkinter.S, tkinter.E, tkinter.W))
+        self.buttons[3].grid(padx=10, pady=10, column=1, row=1, sticky=(tkinter.N, tkinter.S, tkinter.E, tkinter.W))
+        self.buttons[self.selected_button].picked()
+
+    def read_config(self):
+        pass
+
+    def write_config(self, config):
+        pass
+
+    def select(self, which):
+        # print("Changing the active from %d to %d" % (self.selected_button, which))
+        if which != self.selected_button:
+            self.buttons[self.selected_button].not_picked()
+            self.buttons[which].picked()
+            self.selected_button = which
 
 
 # NOTE:  The display I want to configure for is 1024x600 pixels
@@ -77,10 +140,14 @@ class mainWindow(tkinter.ttk.Frame):
         self.left.grid(row=0, column=0, rowspan=3, sticky=(tkinter.N, tkinter.S))
         self.right.grid(row=0, column=2, rowspan=3, sticky=(tkinter.N, tkinter.S))
         self.topBar = TopBar(self)
-        self.topBar.grid(row=0, column=1)
+        self.topBar.grid(row=0, column=1, sticky=(tkinter.W, tkinter.E))
+        self.rowconfigure(0, weight=0)
+        self.rowconfigure(1, weight=1)
+        self.rowconfigure(2, weight=0)
         self.xmitters = TransmitterButtons(self, relief="groove")
-        self.xmitters.grid(pady=5, row=1, column=1, sticky=(tkinter.E, tkinter.W))
-        self.ta = tkinter.scrolledtext.ScrolledText(self)
+        self.xmitters.rowconfigure(0, weight=1)
+        self.xmitters.grid(pady=5, row=1, column=1, sticky=(tkinter.N, tkinter.S, tkinter.E, tkinter.W))
+        self.ta = tkinter.scrolledtext.ScrolledText(self, width=100, height=6)
         self.ta.grid(row=2, column=1)
         self.bind_all('<Alt-Key-q>', self.getout)
         self.bind_all('<Key>', self.getout)
@@ -97,6 +164,15 @@ class mainWindow(tkinter.ttk.Frame):
             quit()
         if (16 == 0xfe & event.state):
             self.encoder.one_letter(1, event.char)
+
+    def read_config(self):
+        pass
+
+    def write_config(self, config):
+        pass
+
+    def active_xmitter(self, xmitter):
+        self.active_xmitter = xmitter
 
 # Note:  If I'm going to allow the system to drive multiple transmitters
 # simultaneously, I'm going to have to work out a mechanism for dealing
