@@ -6,6 +6,7 @@ import tkinter.scrolledtext
 import threading
 import queue
 import time
+import json
 
 from sys import stdout
 import serial
@@ -17,10 +18,10 @@ class MemoryButton(tkinter.ttk.Button):
         super(MemoryButton, self).__init__(master, **kwargs)
         # print(self.text)
 
-    def read_config(self):
+    def save_config(self):
         pass
 
-    def write_config(self, config):
+    def restore_config(self, config):
         pass
 
 class MemoryButtons(tkinter.ttk.Frame):
@@ -34,10 +35,10 @@ class MemoryButtons(tkinter.ttk.Frame):
             b.grid(column=0, row=i, padx=2, pady=2, sticky=(tkinter.N, tkinter.S))
             self.buttons.append(b)
 
-    def read_config(self):
+    def save_config(self):
         pass
 
-    def write_config(self, config):
+    def restore_config(self, config):
         pass
 
 class TopBar(tkinter.ttk.Frame):
@@ -56,10 +57,10 @@ class TopBar(tkinter.ttk.Frame):
         self.wpm.grid(column=1, row=0)
         self.wpmMinus.grid(column=0, row=0)
 
-    def read_config(self):
+    def save_config(self):
         pass
 
-    def write_config(self, config):
+    def restore_config(self, config):
         pass
 
 class TransmitterButton(tkinter.ttk.Button):
@@ -69,22 +70,26 @@ class TransmitterButton(tkinter.ttk.Button):
         self.which = which
         self.stylename = stylename
         self.bind('<Button-1>', self.clicked)
+        self.selected = False
 
-    def read_config(self):
-        pass
+    def save_config(self):
+        return self.selected
 
-    def write_config(self, config):
-        pass
+    def restore_config(self, config):
+        if config:
+            self.clicked(None)
 
     def picked(self):
         style.configure(self.stylename, background='lightgreen')
         style.map(self.stylename, background=[('active', 'lightgreen')])
         # self.master.select(which)
+        self.selected = True
         pass
 
     def not_picked(self):
         style.map(self.stylename, background=[('active', 'red')])
         style.configure(self.stylename, background='red')
+        self.selected = False
         pass
 
     def clicked(self, foo):
@@ -93,7 +98,7 @@ class TransmitterButton(tkinter.ttk.Button):
 class TransmitterButtons(tkinter.ttk.Frame):
     def __init__(self, master, **kwargs):
         super(TransmitterButtons, self).__init__(master, **kwargs)
-        self.selected_button = 0
+        self.selected_button = None
         self.buttons = []
         global style
         style = tkinter.ttk.Style()
@@ -110,18 +115,29 @@ class TransmitterButtons(tkinter.ttk.Frame):
         self.buttons[1].grid(padx=10, pady=10, column=1, row=0, sticky=(tkinter.N, tkinter.S, tkinter.E, tkinter.W))
         self.buttons[2].grid(padx=10, pady=10, column=0, row=1, sticky=(tkinter.N, tkinter.S, tkinter.E, tkinter.W))
         self.buttons[3].grid(padx=10, pady=10, column=1, row=1, sticky=(tkinter.N, tkinter.S, tkinter.E, tkinter.W))
-        self.buttons[self.selected_button].picked()
+        # self.buttons[self.selected_button].picked()
 
-    def read_config(self):
-        pass
+    def save_config(self):
+        response = []
+        for button in self.buttons:
+            response.append(button.save_config())
+        return response
 
-    def write_config(self, config):
+    def restore_config(self, config):
+        # This is tricky.  I have to configure the buttons with what's in the config as long as there isn't more config than buttons
+        max = len(config)
+        count = 0
+        for button in self.buttons:
+            if count < max:
+                button.restore_config(config[count])
+            count = count + 1
         pass
 
     def select(self, which):
         # print("Changing the active from %d to %d" % (self.selected_button, which))
         if which != self.selected_button:
-            self.buttons[self.selected_button].not_picked()
+            if self.selected_button is not None:
+                self.buttons[self.selected_button].not_picked()
             self.buttons[which].picked()
             self.selected_button = which
 
@@ -165,11 +181,15 @@ class mainWindow(tkinter.ttk.Frame):
         if (16 == 0xfe & event.state):
             self.encoder.one_letter(1, event.char)
 
-    def read_config(self):
-        pass
+    def save_config(self):
+        # The transmitters and the top bar and the left and right memory buttons have configurations
+        # start with the transmitters
+        config = {}
+        config['xmitters'] = self.xmitters.save_config()
+        return config
 
-    def write_config(self, config):
-        pass
+    def restore_config(self, config):
+        self.xmitters.restore_config(config['xmitters'])
 
     def active_xmitter(self, xmitter):
         self.active_xmitter = xmitter
@@ -216,7 +236,7 @@ class xmitThread(threading.Thread):
 
 
 class recvThread(threading.Thread):
-    def __init__(self, threadId, port, decoder, xmitter, window):
+    def __init__(self, threadId, port, decoder, xmitter, window):  # Add the config
         threading.Thread.__init__(self)
         self.threadId = threadId
         self.port = port
@@ -273,6 +293,12 @@ top = tkinter.Tk()
 top.title = "Memory Keyer"
 frame = mainWindow(top, encoder, padding="3 3 12 12")
 
+try:
+    with open('keyer_conf.json', 'r') as cfile:
+        frame.restore_config(json.load(cfile))
+except FileNotFoundError as e:
+    pass
+
 if not args.ui:
     thread1 = xmitThread(1, port, xmit_queue)
     thread1.start()
@@ -288,3 +314,6 @@ if not args.ui:
     thread2.join()
     thread1.endThread()
     thread1.join()
+
+with open('keyer_conf.json', 'w') as cfile:
+    json.dump(frame.save_config(), cfile)
