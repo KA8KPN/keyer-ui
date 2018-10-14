@@ -13,33 +13,90 @@ import serial
 # import io
 from morse_to_text import MorseDecoder, MorseEncoder
 
+# Memory button.  The configuration for a memory button is the contents of the memory and whatever else needs to be there
+
 class MemoryButton(tkinter.ttk.Button):
-    def __init__(self, master, **kwargs):
+    def __init__(self, master, encoder, connection, **kwargs):
         super(MemoryButton, self).__init__(master, **kwargs)
+        self.encoder = encoder
+        self.connection = connection
+        self.bind('<Button-1>', self.clicked)
+        self.bind('<Button-2>', self.c_clicked)
+        self.bind('<Button-3>', self.r_clicked)
+        self.content = []
         # print(self.text)
 
+    def action_from_code(self, c):
+        if 'u' == c:
+            return self.key_up
+        elif 'd' == c:
+            return self.key_down
+        else:
+            return self.error_thingie
+
     def save_config(self):
-        pass
+        return [{'code':r['code'], 'time':r['time']} for r in self.content]
 
     def restore_config(self, config):
+        if False:
+            self.content = [{'action':self.key_down, 'code':'d', 'time':10},
+                            {'action':self.key_up, 'code':'u', 'time':10},
+                            {'action':self.key_down, 'code':'d', 'time':30},
+                            {'action':self.key_up, 'code':'u', 'time':10},
+                            {'action':self.key_down, 'code':'d', 'time':10},
+                            {'action':self.key_up, 'code':'u', 'time':30}]
+        else:
+            self.content = [{'action':self.action_from_code(r['code']), 'code':r['code'], 'time':r['time']} for r in config]
+
+    def clicked(self, foo):
+        print("Clicked")
+        for record in self.content:
+            record['action'](record)
         pass
 
+    def c_clicked(self, foo):
+        print("Center Clicked")
+        pass
+
+    def r_clicked(self, foo):
+        print("Right Clicked")
+        pass
+
+    def key_up(self, record):
+        # TODO:  Set the transmitter number for real
+        self.connection.key_up(1, record['time'])
+        pass
+
+    def key_down(self, record):
+        # TODO:  Set the transmitter number for real
+        self.connection.key_down(1, record['time'])
+        pass
+
+
 class MemoryButtons(tkinter.ttk.Frame):
-    def __init__(self, master, startCount, numButtons, **kwargs):
+    def __init__(self, master, startCount, numButtons, encoder, connection, **kwargs):
         super(MemoryButtons, self).__init__(master, **kwargs)
         self.columnconfigure(0, weight=1)
         self.buttons = []
         for i in range(numButtons):
-            b = MemoryButton(self, text="F%d"%(i+startCount))
+            b = MemoryButton(self, encoder, connection, text="F%d"%(i+startCount))
             self.rowconfigure(i, weight=1)
             b.grid(column=0, row=i, padx=2, pady=2, sticky=(tkinter.N, tkinter.S))
             self.buttons.append(b)
 
     def save_config(self):
-        pass
+        response = []
+        for button in self.buttons:
+            response.append(button.save_config())
+        return response
 
     def restore_config(self, config):
-        pass
+        # This is tricky.  I have to configure the buttons with what's in the config as long as there isn't more config than buttons
+        max = len(config)
+        count = 0
+        for button in self.buttons:
+            if count < max:
+                button.restore_config(config[count])
 
 class TopBar(tkinter.ttk.Frame):
     def __init__(self, master, **kwargs):
@@ -141,18 +198,22 @@ class TransmitterButtons(tkinter.ttk.Frame):
             self.buttons[which].picked()
             self.selected_button = which
 
+    def selected(self):
+        return self.selected_button
+
 
 # NOTE:  The display I want to configure for is 1024x600 pixels
 class mainWindow(tkinter.ttk.Frame):
-    def __init__(self, top, encoder, **kwargs):
-        self.encoder = encoder
-        self.xmit_queue = xmit_queue
+    def __init__(self, top, encoder, connection, **kwargs):
         super().__init__(top)
+        self.encoder = encoder
+        self.connection = connection
+        self.xmit_queue = xmit_queue
         top.rowconfigure(0, weight=1)
         top.columnconfigure(0, weight=1)
         self.grid(column=0, row=0, sticky=(tkinter.N, tkinter.W, tkinter.E, tkinter.S))
-        self.left = MemoryButtons(self, 1, 6)
-        self.right = MemoryButtons(self, 7, 6)
+        self.left = MemoryButtons(self, 1, 6, encoder, connection)
+        self.right = MemoryButtons(self, 7, 6, encoder, connection)
         self.left.grid(row=0, column=0, rowspan=3, sticky=(tkinter.N, tkinter.S))
         self.right.grid(row=0, column=2, rowspan=3, sticky=(tkinter.N, tkinter.S))
         self.topBar = TopBar(self)
@@ -179,17 +240,36 @@ class mainWindow(tkinter.ttk.Frame):
         if (0 != 0x08 & event.state) and ('q' == event.char):
             quit()
         if (16 == 0xfe & event.state):
-            self.encoder.one_letter(1, event.char)
+            xmitter = self.xmitters.selected() + 1
+            if event.char.isspace():
+                # TODO:  Not repeat the word spaces
+                self.connection.key_up(xmitter, 70)
+            else:
+                try:
+                    for i in self.encoder.one_letter(event.char):
+                        if ('d' == i['code']):
+                            self.connection.key_down(xmitter, i['time'])
+                        else:
+                            self.connection.key_up(xmitter, i['time'])
+                except Exception as e:
+                    # print(e)
+                    print("Character %s not found" % event.char)
+                finally:
+                    self.connection.key_up(xmitter, 30)
 
     def save_config(self):
-        # The transmitters and the top bar and the left and right memory buttons have configurations
-        # start with the transmitters
         config = {}
         config['xmitters'] = self.xmitters.save_config()
+        config['topbar'] = self.topBar.save_config()
+        config['left'] = self.left.save_config()
+        config['right'] = self.right.save_config()
         return config
 
     def restore_config(self, config):
         self.xmitters.restore_config(config['xmitters'])
+        self.topBar.restore_config(config['topbar'])
+        self.left.restore_config(config['left'])
+        self.right.restore_config(config['right'])
 
     def active_xmitter(self, xmitter):
         self.active_xmitter = xmitter
@@ -273,6 +353,20 @@ class recvThread(threading.Thread):
                     # stdout.write(c)
                     # stdout.flush()
 
+class DongleConnectionProtocol():
+    def __init__(self, xmit_queue):
+        self.xmit_queue = xmit_queue
+        pass
+
+    def key_down(self, xmitter, twitches):
+        self.xmit_queue.put(('d:%d:%d\r\n' % (xmitter, twitches)).encode('ascii'))
+        print("Sent     the line '%s'" % ('d:%d:%d\r\n' % (xmitter, twitches)))
+
+    def key_up(self, xmitter, twitches):
+        self.xmit_queue.put(('u:%d:%d\r\n' % (xmitter, twitches)).encode('ascii'))
+        print("Sent     the line '%s'" % ('u:%d:%d\r\n' % (xmitter, twitches)))
+
+
 import argparse
 
 parser = argparse.ArgumentParser(description="Telegraph Keyer User Interface")
@@ -286,12 +380,13 @@ if not args.ui:
     # sio = io.TextIOWrapper(io.BufferedRWPair(port, port))
 
 xmit_queue = queue.Queue()
+dongle_connect = DongleConnectionProtocol(xmit_queue)
 decoder = MorseDecoder()
-encoder = MorseEncoder(xmit_queue)
+encoder = MorseEncoder(dongle_connect)
 
 top = tkinter.Tk()
 top.title = "Memory Keyer"
-frame = mainWindow(top, encoder, padding="3 3 12 12")
+frame = mainWindow(top, encoder, dongle_connect, padding="3 3 12 12")
 
 try:
     with open('keyer_conf.json', 'r') as cfile:

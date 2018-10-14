@@ -92,6 +92,9 @@ build_morse_decode_table(morse_table)
 
 # print(morse_decode_table)
 
+# TODO:  Some sort of abstraction so that the decoder doesn't have to know anything about the
+# protcol from the dongle to the host
+
 class MorseDecoder:
     def __init__(self):
         self.__decode_state = morse_decode_table
@@ -121,31 +124,32 @@ class MorseDecoder:
         return decoded
                 
 
+def case_to_time(c):
+    if c.islower():
+        return 10
+    else:
+        return 30
+
 class MorseEncoder:
-    def __init__(self, xmit_queue):
-        self.xmit_queue = xmit_queue
+    def __init__(self, conn):
+        self.conn = conn
         self.encode_table = {}
         for i in morse_table:
             self.encode_table[i['c']] = i['s']
             if i['lc']:
                 self.encode_table[i['c'].lower()] = i['s']
-        print(self.encode_table)
+        # print(self.encode_table)
 
-    def one_letter(self, xmitter, s):
-        if s.isspace():
-            self.xmit_queue.put(('u:%d:40\r\n' % xmitter).encode('ascii'))
-        elif s in self.encode_table:
-            p = self.encode_table[s]
-            for i in p:
-                if i.islower():
-                    self.xmit_queue.put(('d:%d:10\r\n' % xmitter).encode('ascii'))
-                    # print("Sent     the line '%s'" % ('d:%d:10' % xmitter))
-                else:
-                    self.xmit_queue.put(('d:%d:30\r\n' % xmitter).encode('ascii'))
-                    # print("Sent     the line '%s'" % ('d:%d:30' % xmitter))
-                self.xmit_queue.put(('u:%d:10\r\n' % xmitter).encode('ascii'))
-                # print("Sent     the line '%s'" % ('u:%d:10' % xmitter))
-            self.xmit_queue.put(('u:%d:20\r\n' % xmitter).encode('ascii'))
-            # print("Sent     the line '%s'" % ('u:%d:20' % xmitter))
-        else:
-            print("Character %s not found" % s)
+    def one_letter(self, s):
+        # print(self.encode_table[s])
+        presses = [{'code':'d', 'time':case_to_time(c)} for c in self.encode_table[s]]
+        release = None
+        result = []
+        for press in presses:
+            if release is None:
+                release = {'code':'u', 'time':10}
+            else:
+                result.append(release)
+            result.append(press)
+        # print(result)
+        return result
