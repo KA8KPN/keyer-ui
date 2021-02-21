@@ -310,16 +310,17 @@ class xmitThread(threading.Thread):
         self.xmit_queue = xmit_queue
         self.xon = True
         self.stopThread = stopThread
+        self.acknowledged = False
 
     def run(self):
         while not self.stopThread.is_set():
             if self.xon:
+                while not self.stopThread.is_set() and not self.acknowledged:
+                    time.sleep(0.01)
                 item = self.xmit_queue.get()
                 self.acknowledged = False
                 self.port.write(item)
                 # print("Sent     the line '%s'" % item)
-                while not self.stopThread.is_set() and not self.acknowledged:
-                    time.sleep(0.01)
             else:
                 time.sleep(0.1)
 
