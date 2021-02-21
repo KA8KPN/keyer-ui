@@ -13,6 +13,9 @@ import serial
 # import io
 from morse_to_text import MorseDecoder, MorseEncoder
 
+active_transmitter = 1
+paddle_mode = None
+
 # Memory button.  The configuration for a memory button is the contents of the memory and whatever else needs to be there
 
 class MemoryButton(tkinter.ttk.Button):
@@ -63,13 +66,13 @@ class MemoryButton(tkinter.ttk.Button):
         pass
 
     def key_up(self, record):
-        # TODO:  Set the transmitter number for real
-        self.connection.key_up(1, record['time'])
+        global active_transmitter
+        self.connection.key_up(active_transmitter, record['time'])
         pass
 
     def key_down(self, record):
-        # TODO:  Set the transmitter number for real
-        self.connection.key_down(1, record['time'])
+        global active_transmitter
+        self.connection.key_down(active_transmitter, record['time'])
         pass
 
 
@@ -98,15 +101,33 @@ class MemoryButtons(tkinter.ttk.Frame):
             if count < max:
                 button.restore_config(config[count])
 
+def change_dropdown(*args):
+    global paddle_mode;
+    dongle_connect.set_mode(paddle_mode.get())
+
+def reverseCallBack():
+    dongle_connect.reverse()
+
 class TopBar(tkinter.ttk.Frame):
     def __init__(self, master, **kwargs):
         super(TopBar, self).__init__(master, **kwargs)
-        self.left = tkinter.ttk.Label(self, text="Paddle Mode:  Iambic-A")
+        self.left = tkinter.ttk.Label(self, text="Paddle Mode: ")
+        options = ["Iambic-A", "Semiautomatic", "Manual"]
+        global paddle_mode
+        paddle_mode = tkinter.StringVar()
+        paddle_mode.set("Iambic-A")
+        paddle_mode.trace('w', change_dropdown)
+        self.mode = tkinter.OptionMenu(self, paddle_mode, *options)
+        self.reverse = tkinter.ttk.Button(self, text="Reverse", command=reverseCallBack)
         self.right = tkinter.ttk.Frame(self, relief="ridge")
-        self.columnconfigure(0, weight=1)
-        self.columnconfigure(1, weight=1)
+        self.columnconfigure(0, weight=0)
+        self.columnconfigure(1, weight=0)
+        self.columnconfigure(2, weight=1)
+        self.columnconfigure(3, weight=1)
         self.left.grid(padx=2, column=0, row=0, sticky=(tkinter.W))
-        self.right.grid(padx=2, column=1, row=0, sticky=(tkinter.E))
+        self.mode.grid(padx=2, column=1, row=0, sticky=(tkinter.W))
+        self.reverse.grid(padx=2, column=2, row=0, sticky=(tkinter.W))
+        self.right.grid(padx=2, column=3, row=0, sticky=(tkinter.E))
         self.wpmPlus = tkinter.ttk.Button(self.right, text="+")
         self.wpmMinus = tkinter.ttk.Button(self.right, text="-")
         self.wpm = tkinter.ttk.Label(self.right, text="18 WPM")
@@ -140,9 +161,11 @@ class TransmitterButton(tkinter.ttk.Button):
     def picked(self):
         style.configure(self.stylename, background='lightgreen')
         style.map(self.stylename, background=[('active', 'lightgreen')])
-        # self.master.select(which)
+        global active_transmitter
         self.selected = True
         self.connection.set_transmitter(self.which)
+        print("Transmitter %s is now active" % str(self.which))
+        active_transmitter = self.which
         pass
 
     def not_picked(self):
@@ -153,6 +176,9 @@ class TransmitterButton(tkinter.ttk.Button):
 
     def clicked(self, foo):
         self.master.select(self.which)
+
+    def xmitter_num(self):
+        return self.which
 
 class TransmitterButtons(tkinter.ttk.Frame):
     def __init__(self, master, connection, **kwargs):
@@ -165,7 +191,7 @@ class TransmitterButtons(tkinter.ttk.Frame):
             stylename = "xmit_button%d.TButton" % i
             style.configure(stylename, foreground='black', background='red', relief='sunken')
             style.map(stylename, background=[('active', 'red')], relief=[('active', 'raised')])
-            self.buttons.append(TransmitterButton(self, i, stylename, connection, text="Transmitter\n%d" % (i+1), style=stylename))
+            self.buttons.append(TransmitterButton(self, i+1, stylename, connection, text="Transmitter\n%d" % (i+1), style=stylename))
         self.columnconfigure(0, weight=1)
         self.columnconfigure(1, weight=1)
         self.rowconfigure(0, weight=1)
@@ -194,14 +220,14 @@ class TransmitterButtons(tkinter.ttk.Frame):
 
     def select(self, which):
         # print("Changing the active from %d to %d" % (self.selected_button, which))
-        if which != self.selected_button:
+        if (which-1) != self.selected_button:
             if self.selected_button is not None:
-                self.buttons[self.selected_button].not_picked()
-            self.buttons[which].picked()
+                self.buttons[self.selected_button-1].not_picked()
+            self.buttons[which-1].picked()
             self.selected_button = which
 
     def selected(self):
-        return self.selected_button
+        return self.selected_button-1
 
 
 # NOTE:  The display I want to configure for is 1024x600 pixels
@@ -272,9 +298,6 @@ class mainWindow(tkinter.ttk.Frame):
         self.topBar.restore_config(config['topbar'])
         self.left.restore_config(config['left'])
         self.right.restore_config(config['right'])
-
-    def active_xmitter(self, xmitter):
-        self.active_xmitter = xmitter
 
 # Note:  If I'm going to allow the system to drive multiple transmitters
 # simultaneously, I'm going to have to work out a mechanism for dealing
@@ -369,8 +392,22 @@ class DongleConnectionProtocol():
         print("Sent     the line '%s'" % ('u:%d:%d\r\n' % (xmitter, twitches)))
 
     def set_transmitter(self, xmitter):
-        self.xmit_queue.put(('t:%d\r\n' % (xmitter+1)).encode('ascii'))
-        print("Sent     the line '%s'" % ('t:%d\r\n' % (xmitter+1)))
+        self.xmit_queue.put(('t:%d\r\n' % (xmitter)).encode('ascii'))
+        print("Sent     the line '%s'" % ('t:%d\r\n' % (xmitter)))
+
+    def set_mode(self, new_mode):
+        mode = None
+        if "Iambic-A" == new_mode:
+            mode = "a"
+        elif "Semiautomatic" == new_mode:
+            mode = "s"
+        elif "Manual" == new_mode:
+            mode = "m"
+        if mode is not None:
+            self.xmit_queue.put(('pm:%s\r\n' % (mode)).encode('ascii'))
+
+    def reverse(self):
+        self.xmit_queue.put(('pr\r\n').encode('ascii'))
 
 
 import argparse
