@@ -164,7 +164,7 @@ class TransmitterButton(tkinter.ttk.Button):
         global active_transmitter
         self.selected = True
         self.connection.set_transmitter(self.which)
-        print("Transmitter %s is now active" % str(self.which))
+        print("Transmitter %s is now active" % str(self.which+1))
         active_transmitter = self.which
         pass
 
@@ -191,7 +191,7 @@ class TransmitterButtons(tkinter.ttk.Frame):
             stylename = "xmit_button%d.TButton" % i
             style.configure(stylename, foreground='black', background='red', relief='sunken')
             style.map(stylename, background=[('active', 'red')], relief=[('active', 'raised')])
-            self.buttons.append(TransmitterButton(self, i+1, stylename, connection, text="Transmitter\n%d" % (i+1), style=stylename))
+            self.buttons.append(TransmitterButton(self, i, stylename, connection, text="Transmitter\n%d" % (i+1), style=stylename))
         self.columnconfigure(0, weight=1)
         self.columnconfigure(1, weight=1)
         self.rowconfigure(0, weight=1)
@@ -220,14 +220,14 @@ class TransmitterButtons(tkinter.ttk.Frame):
 
     def select(self, which):
         # print("Changing the active from %d to %d" % (self.selected_button, which))
-        if (which-1) != self.selected_button:
+        if which != self.selected_button:
             if self.selected_button is not None:
-                self.buttons[self.selected_button-1].not_picked()
-            self.buttons[which-1].picked()
+                self.buttons[self.selected_button].not_picked()
+            self.buttons[which].picked()
             self.selected_button = which
 
     def selected(self):
-        return self.selected_button-1
+        return self.selected_button
 
 
 # NOTE:  The display I want to configure for is 1024x600 pixels
@@ -268,7 +268,7 @@ class mainWindow(tkinter.ttk.Frame):
         if (0 != 0x08 & event.state) and ('q' == event.char):
             quit()
         if (16 == 0xfe & event.state):
-            xmitter = self.xmitters.selected() + 1
+            xmitter = self.xmitters.selected()
             if event.char.isspace():
                 # TODO:  Not repeat the word spaces
                 self.connection.key_up(xmitter, 70)
