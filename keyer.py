@@ -101,7 +101,7 @@ class MemoryButtons(tkinter.ttk.Frame):
             if count < max:
                 button.restore_config(config[count])
 
-def change_dropdown(*args):
+def changeDropdown(*args):
     global paddle_mode;
     dongle_connect.set_mode(paddle_mode.get())
 
@@ -116,7 +116,7 @@ class TopBar(tkinter.ttk.Frame):
         global paddle_mode
         paddle_mode = tkinter.StringVar()
         paddle_mode.set("Iambic-A")
-        paddle_mode.trace('w', change_dropdown)
+        paddle_mode.trace('w', changeDropdown)
         self.mode = tkinter.OptionMenu(self, paddle_mode, *options)
         self.reverse = tkinter.ttk.Button(self, text="Reverse", command=reverseCallBack)
         self.right = tkinter.ttk.Frame(self, relief="ridge")
@@ -303,25 +303,22 @@ class mainWindow(tkinter.ttk.Frame):
 # simultaneously, I'm going to have to work out a mechanism for dealing
 # with multiple transmit queues, one per transmitter
 class xmitThread(threading.Thread):
-    def __init__(self, threadId, port, xmit_queue):
+    def __init__(self, threadId, port, xmit_queue, stopThread):
         threading.Thread.__init__(self)
         self.threadId = threadId
         self.port = port
-        self.continueThread = True
         self.xmit_queue = xmit_queue
         self.xon = True
-
-    def endThread(self):
-        self.continueThread = False
+        self.stopThread = stopThread
 
     def run(self):
-        while self.continueThread:
+        while not self.stopThread.is_set():
             if self.xon:
                 item = self.xmit_queue.get()
                 self.acknowledged = False
                 self.port.write(item)
                 # print("Sent     the line '%s'" % item)
-                while not self.acknowledged:
+                while not self.stopThread.is_set() and not self.acknowledged:
                     time.sleep(0.01)
             else:
                 time.sleep(0.1)
@@ -341,42 +338,41 @@ class xmitThread(threading.Thread):
 
 
 class recvThread(threading.Thread):
-    def __init__(self, threadId, port, decoder, xmitter, window):  # Add the config
+    def __init__(self, threadId, port, decoder, xmitter, window, stopThread):  # Add the config
         threading.Thread.__init__(self)
         self.threadId = threadId
         self.port = port
         self.window = window
-        self.continueThread = True
         self.decoder = decoder
         self.xmitter = xmitter
-
-    def endThread(self):
-        self.continueThread = False
+        self.stopThread = stopThread
 
     def run(self):
-        while self.continueThread:
-            line = self.port.readline().decode('ascii').strip().split(':')
-            # print("Received the line '%s'" % ':'.join(line))
-            # print("The first part is '%s'" % line[0])
-            if "" == line[0]:
-                # break
-                pass
-            elif 'a' == line[0]:
-                self.xmitter.acknowledge()
-            elif 'xon' == line[0]:
-                # print("Receiver attempting to resume the transmitter")
-                self.xmitter.resume(int(line[1]))
-            elif 'xoff' == line[0]:
-                # print("Receiver attempting to pause the transmitter")
-                self.xmitter.pause(int(line[1]))
-            else:
-                # print("Received the line '%s'" % line)
+        while not self.stopThread.is_set():
+            line = self.port.readline()
+            if not self.stopThread.is_set():
+                line = line.decode('ascii').strip().split(':')
+                # print("Received the line '%s'" % ':'.join(line))
+                # print("The first part is '%s'" % line[0])
+                if "" == line[0]:
+                    # break
+                    pass
+                elif 'a' == line[0]:
+                    self.xmitter.acknowledge()
+                elif 'xon' == line[0]:
+                    # print("Receiver attempting to resume the transmitter")
+                    self.xmitter.resume(int(line[1]))
+                elif 'xoff' == line[0]:
+                    # print("Receiver attempting to pause the transmitter")
+                    self.xmitter.pause(int(line[1]))
+                else:
+                    # print("Received the line '%s'" % line)
 
-                c = self.decoder.one_symbol(line)
-                if c is not None:
-                    self.window.addChar(c)
-                    # stdout.write(c)
-                    # stdout.flush()
+                    c = self.decoder.one_symbol(line)
+                    if c is not None:
+                        self.window.addChar(c)
+                        # stdout.write(c)
+                        # stdout.flush()
 
 class DongleConnectionProtocol():
     def __init__(self, xmit_queue):
@@ -419,7 +415,7 @@ parser.add_argument("--serial", nargs='?', help="The serial port to use to talk 
 args = parser.parse_args()
 
 if not args.ui:
-    port = serial.Serial(args.serial, 115200, timeout=30, xonxoff=True)
+    port = serial.Serial(args.serial, 115200, timeout=5, xonxoff=True)
     # sio = io.TextIOWrapper(io.BufferedRWPair(port, port))
 
 xmit_queue = queue.Queue()
@@ -437,21 +433,22 @@ try:
 except FileNotFoundError as e:
     pass
 
+stopThread = threading.Event()
+
 if not args.ui:
-    thread1 = xmitThread(1, port, xmit_queue)
+    thread1 = xmitThread(1, port, xmit_queue, stopThread)
     thread1.start()
-    thread2 = recvThread(1, port, decoder, thread1, frame)
+    thread2 = recvThread(1, port, decoder, thread1, frame, stopThread)
     thread2.start()
 
 top.mainloop()
 
 if not args.ui:
-    port.close()
-
-    thread2.endThread()
+    stopThread.set();
+    xmit_queue.put(b'')
     thread2.join()
-    thread1.endThread()
     thread1.join()
+    port.close()
 
 with open('keyer_conf.json', 'w') as cfile:
     json.dump(frame.save_config(), cfile)
