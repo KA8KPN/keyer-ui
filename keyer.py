@@ -121,11 +121,12 @@ class TopBar(tkinter.ttk.Frame):
         pass
 
 class TransmitterButton(tkinter.ttk.Button):
-    def __init__(self, master, which, stylename, **kwargs):
+    def __init__(self, master, which, stylename, connection, **kwargs):
         super(TransmitterButton, self).__init__(master, **kwargs)
         self.master = master
         self.which = which
         self.stylename = stylename
+        self.connection = connection
         self.bind('<Button-1>', self.clicked)
         self.selected = False
 
@@ -141,6 +142,7 @@ class TransmitterButton(tkinter.ttk.Button):
         style.map(self.stylename, background=[('active', 'lightgreen')])
         # self.master.select(which)
         self.selected = True
+        self.connection.set_transmitter(self.which)
         pass
 
     def not_picked(self):
@@ -153,7 +155,7 @@ class TransmitterButton(tkinter.ttk.Button):
         self.master.select(self.which)
 
 class TransmitterButtons(tkinter.ttk.Frame):
-    def __init__(self, master, **kwargs):
+    def __init__(self, master, connection, **kwargs):
         super(TransmitterButtons, self).__init__(master, **kwargs)
         self.selected_button = None
         self.buttons = []
@@ -163,7 +165,7 @@ class TransmitterButtons(tkinter.ttk.Frame):
             stylename = "xmit_button%d.TButton" % i
             style.configure(stylename, foreground='black', background='red', relief='sunken')
             style.map(stylename, background=[('active', 'red')], relief=[('active', 'raised')])
-            self.buttons.append(TransmitterButton(self, i, stylename, text="Transmitter\n%d" % (i+1), style=stylename))
+            self.buttons.append(TransmitterButton(self, i, stylename, connection, text="Transmitter\n%d" % (i+1), style=stylename))
         self.columnconfigure(0, weight=1)
         self.columnconfigure(1, weight=1)
         self.rowconfigure(0, weight=1)
@@ -221,7 +223,7 @@ class mainWindow(tkinter.ttk.Frame):
         self.rowconfigure(0, weight=0)
         self.rowconfigure(1, weight=1)
         self.rowconfigure(2, weight=0)
-        self.xmitters = TransmitterButtons(self, relief="groove")
+        self.xmitters = TransmitterButtons(self, connection, relief="groove")
         self.xmitters.rowconfigure(0, weight=1)
         self.xmitters.grid(pady=5, row=1, column=1, sticky=(tkinter.N, tkinter.S, tkinter.E, tkinter.W))
         self.ta = tkinter.scrolledtext.ScrolledText(self, width=100, height=6)
@@ -365,6 +367,10 @@ class DongleConnectionProtocol():
     def key_up(self, xmitter, twitches):
         self.xmit_queue.put(('u:%d:%d\r\n' % (xmitter, twitches)).encode('ascii'))
         print("Sent     the line '%s'" % ('u:%d:%d\r\n' % (xmitter, twitches)))
+
+    def set_transmitter(self, xmitter):
+        self.xmit_queue.put(('t:%d\r\n' % (xmitter+1)).encode('ascii'))
+        print("Sent     the line '%s'" % ('t:%d\r\n' % (xmitter+1)))
 
 
 import argparse
