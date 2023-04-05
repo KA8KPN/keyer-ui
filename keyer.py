@@ -15,14 +15,18 @@ from morse_to_text import MorseDecoder, MorseEncoder
 
 active_transmitter = 1
 paddle_mode = None
+recording = None
+active_memory = 0
+mem_buttons = []
 
 # Memory button.  The configuration for a memory button is the contents of the memory and whatever else needs to be there
 
 class MemoryButton(tkinter.ttk.Button):
-    def __init__(self, master, encoder, connection, **kwargs):
+    def __init__(self, master, encoder, connection, which, **kwargs):
         super(MemoryButton, self).__init__(master, **kwargs)
         self.encoder = encoder
         self.connection = connection
+        self.which = which
         self.bind('<Button-1>', self.clicked)
         self.bind('<Button-2>', self.c_clicked)
         self.bind('<Button-3>', self.r_clicked)
@@ -53,9 +57,20 @@ class MemoryButton(tkinter.ttk.Button):
 
     def clicked(self, foo):
         print("Clicked")
-        for record in self.content:
-            record['action'](record)
-        pass
+        global active_memory
+        global recording
+        active_memory = self.which
+        if recording is None:
+            print("Playing back memory %d" % self.which)
+            print(self.content)
+            for record in self.content:
+                record['action'](record)
+            active_memory = 0
+        else:
+            # This needs to turn the recording off.  I'm not 100% sure how to achieve that.
+            print("Recording memory %d" % self.which)
+            active_memory = self.which
+            self.content = []
 
     def c_clicked(self, foo):
         print("Center Clicked")
@@ -75,6 +90,12 @@ class MemoryButton(tkinter.ttk.Button):
         self.connection.key_down(active_transmitter, record['time'])
         pass
 
+    def key_input(self, action, length):
+        if 'u' == action:
+            self.content.append({'action':self.key_up,   'code':'u', 'time':int(length)})
+        else:
+            self.content.append({'action':self.key_down, 'code':'d', 'time':int(length)})
+        # print(self.content)
 
 class MemoryButtons(tkinter.ttk.Frame):
     def __init__(self, master, startCount, numButtons, encoder, connection, **kwargs):
@@ -82,7 +103,9 @@ class MemoryButtons(tkinter.ttk.Frame):
         self.columnconfigure(0, weight=1)
         self.buttons = []
         for i in range(numButtons):
-            b = MemoryButton(self, encoder, connection, text="F%d"%(i+startCount))
+            b = MemoryButton(self, encoder, connection, i+startCount, text="F%d"%(i+startCount))
+            global mem_buttons
+            mem_buttons.append(b)
             self.rowconfigure(i, weight=1)
             b.grid(column=0, row=i, padx=2, pady=2, sticky=(tkinter.N, tkinter.S))
             self.buttons.append(b)
@@ -108,6 +131,30 @@ def changeDropdown(*args):
 def reverseCallBack():
     dongle_connect.reverse()
 
+class RecordButton(tkinter.ttk.Button):
+    def __init__(self, master, **kwargs):
+        self.stylename = "record.TButton"
+        super(RecordButton, self).__init__(master, style=self.stylename, **kwargs)
+        style = tkinter.ttk.Style()
+        self.bind('<Button-1>', self.clicked)
+        style.theme_use('alt')
+        self.background_normal = tkinter.ttk.Style().lookup("TButton", "background")
+        self.background_active = tkinter.ttk.Style().lookup("TButton", "background", state=["active"])
+
+    def clicked(self, foo):
+        global recording
+        style = tkinter.ttk.Style()
+        if recording is None:
+            print("Record Button Clicked - starting the recording")
+            recording = True
+            style.configure(self.stylename, background="red")
+            style.map(self.stylename, background=[('active', 'pink')])
+        else:
+            print("Record Button Clicked - stopping the recording")
+            recording = None
+            style.configure(self.stylename, background=self.background_normal)
+            style.map(self.stylename, background=[('active', self.background_active)])
+
 class TopBar(tkinter.ttk.Frame):
     def __init__(self, master, **kwargs):
         super(TopBar, self).__init__(master, **kwargs)
@@ -119,15 +166,18 @@ class TopBar(tkinter.ttk.Frame):
         paddle_mode.trace('w', changeDropdown)
         self.mode = tkinter.OptionMenu(self, paddle_mode, *options)
         self.reverse = tkinter.ttk.Button(self, text="Reverse", command=reverseCallBack)
+        self.record = RecordButton(self, text="Memory Record")
         self.right = tkinter.ttk.Frame(self, relief="ridge")
         self.columnconfigure(0, weight=0)
         self.columnconfigure(1, weight=0)
-        self.columnconfigure(2, weight=1)
+        self.columnconfigure(2, weight=0)
         self.columnconfigure(3, weight=1)
+        self.columnconfigure(4, weight=1)
         self.left.grid(padx=2, column=0, row=0, sticky=(tkinter.W))
         self.mode.grid(padx=2, column=1, row=0, sticky=(tkinter.W))
         self.reverse.grid(padx=2, column=2, row=0, sticky=(tkinter.W))
-        self.right.grid(padx=2, column=3, row=0, sticky=(tkinter.E))
+        self.record.grid(padx=2, column=3, row=0, sticky=(tkinter.E))
+        self.right.grid(padx=2, column=4, row=0, sticky=(tkinter.E))
         self.wpmPlus = tkinter.ttk.Button(self.right, text="+")
         self.wpmMinus = tkinter.ttk.Button(self.right, text="-")
         self.wpm = tkinter.ttk.Label(self.right, text="18 WPM")
@@ -136,9 +186,11 @@ class TopBar(tkinter.ttk.Frame):
         self.wpmMinus.grid(column=0, row=0)
 
     def save_config(self):
+        # At the very least needs speed and paddle mode
         pass
 
     def restore_config(self, config):
+        # At the very least needs speed and paddle mode
         pass
 
 class TransmitterButton(tkinter.ttk.Button):
@@ -159,8 +211,8 @@ class TransmitterButton(tkinter.ttk.Button):
             self.clicked(None)
 
     def picked(self):
-        style.configure(self.stylename, background='lightgreen')
-        style.map(self.stylename, background=[('active', 'lightgreen')])
+        style.configure(self.stylename, background='#00ff00')
+        style.map(self.stylename, background=[('active', '#c0ffc0')])
         global active_transmitter
         self.selected = True
         self.connection.set_transmitter(self.which)
@@ -169,7 +221,7 @@ class TransmitterButton(tkinter.ttk.Button):
         pass
 
     def not_picked(self):
-        style.map(self.stylename, background=[('active', 'red')])
+        style.map(self.stylename, background=[('active', 'pink')])
         style.configure(self.stylename, background='red')
         self.selected = False
         pass
@@ -189,8 +241,8 @@ class TransmitterButtons(tkinter.ttk.Frame):
         style = tkinter.ttk.Style()
         for i in range(4):
             stylename = "xmit_button%d.TButton" % i
-            style.configure(stylename, foreground='black', background='red', relief='sunken')
-            style.map(stylename, background=[('active', 'red')], relief=[('active', 'raised')])
+            style.configure(stylename, background='red', relief='sunken')
+            style.map(stylename, background=[('active', 'pink')], relief=[('active', 'raised')])
             self.buttons.append(TransmitterButton(self, i, stylename, connection, text="Transmitter\n%d" % (i+1), style=stylename))
         self.columnconfigure(0, weight=1)
         self.columnconfigure(1, weight=1)
@@ -366,8 +418,13 @@ class recvThread(threading.Thread):
                 elif 'xoff' == line[0]:
                     # print("Receiver attempting to pause the transmitter")
                     self.xmitter.pause(int(line[1]))
+                elif 'u' == line[0] or 'd' == line[0]:
+                    global mem_buttons
+                    global recording
+                    if None is not recording:
+                        mem_buttons[active_memory].key_input(line[0], line[2])
                 else:
-                    # print("Received the line '%s'" % line)
+                    print("Received the line '%s'" % line)
 
                     c = self.decoder.one_symbol(line)
                     if c is not None:
@@ -411,7 +468,8 @@ import argparse
 
 parser = argparse.ArgumentParser(description="Telegraph Keyer User Interface")
 parser.add_argument("--ui", help="Run the UI without trying to talk to a keyer", action='store_true')
-parser.add_argument("--serial", nargs='?', help="The serial port to use to talk to the dongle", default="/dev/ttyUSB0")
+# parser.add_argument("--serial", nargs='?', help="The serial port to use to talk to the dongle", default="/dev/ttyUSB0")
+parser.add_argument("--serial", nargs='?', help="The serial port to use to talk to the dongle", default="COM4")
 
 args = parser.parse_args()
 
