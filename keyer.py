@@ -16,8 +16,8 @@ from morse_to_text import MorseDecoder, MorseEncoder
 active_transmitter = 1
 paddle_mode = None
 recording = None
+recording_button = None
 active_memory = 0
-mem_buttons = []
 
 # Memory button.  The configuration for a memory button is the contents of the memory and whatever else needs to be there
 
@@ -31,6 +31,11 @@ class MemoryButton(tkinter.ttk.Button):
         self.bind('<Button-2>', self.c_clicked)
         self.bind('<Button-3>', self.r_clicked)
         self.content = []
+        style = tkinter.ttk.Style()
+        style.theme_use('alt')
+        self.background_normal = tkinter.ttk.Style().lookup("TButton", "background")
+        self.background_active = tkinter.ttk.Style().lookup("TButton", "background", state=["active"])
+        self.recording_started = False
         # print(self.text)
 
     def action_from_code(self, c):
@@ -60,17 +65,40 @@ class MemoryButton(tkinter.ttk.Button):
         global active_memory
         global recording
         active_memory = self.which
+        style = tkinter.ttk.Style()
         if recording is None:
+            style.configure(self.stylename, background='#00ff00')
+            style.map(self.stylename, background=[('active', '#c0ffc0')])
             print("Playing back memory %d" % self.which)
             print(self.content)
             for record in self.content:
                 record['action'](record)
             active_memory = 0
+            style.configure(self.stylename, background=self.background_normal)
+            style.map(self.stylename, background=[('active', self.background_active)])
         else:
+            global recording_button
             # This needs to turn the recording off.  I'm not 100% sure how to achieve that.
-            print("Recording memory %d" % self.which)
-            active_memory = self.which
-            self.content = []
+            if recording_button is not None:
+                recording_button = self
+                style.configure(self.stylename, background="red")
+                style.map(self.stylename, background=[('active', 'pink')])
+                print("Recording memory %d" % self.which)
+                active_memory = self.which
+                self.content = []
+            else:
+                self.end_recording()
+
+    def end_recording(self):
+        style.configure(self.stylename, background=self.background_normal)
+        style.map(self.stylename, background=[('active', self.background_active)])
+        # I want to save the config if recording has actually started
+        # if it hasn't, I may want to restore the old config
+        if self.recording_started:
+            pass
+        self.recording_started = False
+        global recording_button
+        recording_button = None
 
     def c_clicked(self, foo):
         print("Center Clicked")
@@ -92,8 +120,11 @@ class MemoryButton(tkinter.ttk.Button):
 
     def key_input(self, action, length):
         if 'u' == action:
-            self.content.append({'action':self.key_up,   'code':'u', 'time':int(length)})
+            # Only record the key up action if the key has been down at least once
+            if not self.recording_started:
+                self.content.append({'action':self.key_up,   'code':'u', 'time':int(length)})
         else:
+            self.recording_started = True
             self.content.append({'action':self.key_down, 'code':'d', 'time':int(length)})
         # print(self.content)
 
@@ -104,8 +135,6 @@ class MemoryButtons(tkinter.ttk.Frame):
         self.buttons = []
         for i in range(numButtons):
             b = MemoryButton(self, encoder, connection, i+startCount, text="F%d"%(i+startCount))
-            global mem_buttons
-            mem_buttons.append(b)
             self.rowconfigure(i, weight=1)
             b.grid(column=0, row=i, padx=2, pady=2, sticky=(tkinter.N, tkinter.S))
             self.buttons.append(b)
