@@ -18,12 +18,14 @@ paddle_mode = None
 recording = None
 recording_button = None
 active_memory = 0
+record_button = None
 
 # Memory button.  The configuration for a memory button is the contents of the memory and whatever else needs to be there
 
 class MemoryButton(tkinter.ttk.Button):
     def __init__(self, master, encoder, connection, which, **kwargs):
-        super(MemoryButton, self).__init__(master, **kwargs)
+        self.stylename = "F%d.TButton" % which
+        super(MemoryButton, self).__init__(master, style=self.stylename, **kwargs)
         self.encoder = encoder
         self.connection = connection
         self.which = which
@@ -79,7 +81,9 @@ class MemoryButton(tkinter.ttk.Button):
         else:
             global recording_button
             # This needs to turn the recording off.  I'm not 100% sure how to achieve that.
+            self.recording_started = False
             if recording_button is None:
+                print("Starting the recording of memory %d" % self.which)
                 recording_button = self
                 style.configure(self.stylename, background="red")
                 style.map(self.stylename, background=[('active', 'pink')])
@@ -87,10 +91,13 @@ class MemoryButton(tkinter.ttk.Button):
                 active_memory = self.which
                 self.content = []
             else:
+                global record_button
+                record_button.stop_recording()
                 if active_memory == self.which:
                     self.end_recording()
 
     def end_recording(self):
+        print("Ending the recording of memory %d" % self.which)
         style.configure(self.stylename, background=self.background_normal)
         style.map(self.stylename, background=[('active', self.background_active)])
         # I want to save the config if recording has actually started
@@ -122,7 +129,7 @@ class MemoryButton(tkinter.ttk.Button):
     def key_input(self, action, length):
         if 'u' == action:
             # Only record the key up action if the key has been down at least once
-            if not self.recording_started:
+            if self.recording_started:
                 self.content.append({'action':self.key_up,   'code':'u', 'time':int(length)})
         else:
             self.recording_started = True
@@ -181,9 +188,16 @@ class RecordButton(tkinter.ttk.Button):
             style.map(self.stylename, background=[('active', 'pink')])
         else:
             print("Record Button Clicked - stopping the recording")
-            recording = None
-            style.configure(self.stylename, background=self.background_normal)
-            style.map(self.stylename, background=[('active', self.background_active)])
+            self.stop_recording()
+
+    def stop_recording(self):
+        global recording
+        recording = None
+        style.configure(self.stylename, background=self.background_normal)
+        style.map(self.stylename, background=[('active', self.background_active)])
+        global recording_button
+        if recording_button is not None:
+            recording_button.end_recording()
 
 class TopBar(tkinter.ttk.Frame):
     def __init__(self, master, **kwargs):
@@ -196,7 +210,8 @@ class TopBar(tkinter.ttk.Frame):
         paddle_mode.trace('w', changeDropdown)
         self.mode = tkinter.OptionMenu(self, paddle_mode, *options)
         self.reverse = tkinter.ttk.Button(self, text="Reverse", command=reverseCallBack)
-        self.record = RecordButton(self, text="Memory Record")
+        global record_button
+        record_button = RecordButton(self, text="Memory Record")
         self.right = tkinter.ttk.Frame(self, relief="ridge")
         self.columnconfigure(0, weight=0)
         self.columnconfigure(1, weight=0)
@@ -206,7 +221,7 @@ class TopBar(tkinter.ttk.Frame):
         self.left.grid(padx=2, column=0, row=0, sticky=(tkinter.W))
         self.mode.grid(padx=2, column=1, row=0, sticky=(tkinter.W))
         self.reverse.grid(padx=2, column=2, row=0, sticky=(tkinter.W))
-        self.record.grid(padx=2, column=3, row=0, sticky=(tkinter.E))
+        record_button.grid(padx=2, column=3, row=0, sticky=(tkinter.E))
         self.right.grid(padx=2, column=4, row=0, sticky=(tkinter.E))
         self.wpmPlus = tkinter.ttk.Button(self.right, text="+")
         self.wpmMinus = tkinter.ttk.Button(self.right, text="-")
@@ -449,7 +464,7 @@ class recvThread(threading.Thread):
                     # print("Receiver attempting to pause the transmitter")
                     self.xmitter.pause(int(line[1]))
                 elif 'u' == line[0] or 'd' == line[0]:
-                   global recording_button
+                    global recording_button
                     if None is not recording_button:
                         recording_button.key_input(line[0], line[2])
                 else:
