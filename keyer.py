@@ -79,7 +79,7 @@ class MemoryButton(tkinter.ttk.Button):
         else:
             global recording_button
             # This needs to turn the recording off.  I'm not 100% sure how to achieve that.
-            if recording_button is not None:
+            if recording_button is None:
                 recording_button = self
                 style.configure(self.stylename, background="red")
                 style.map(self.stylename, background=[('active', 'pink')])
@@ -87,7 +87,8 @@ class MemoryButton(tkinter.ttk.Button):
                 active_memory = self.which
                 self.content = []
             else:
-                self.end_recording()
+                if active_memory == self.which:
+                    self.end_recording()
 
     def end_recording(self):
         style.configure(self.stylename, background=self.background_normal)
@@ -448,10 +449,9 @@ class recvThread(threading.Thread):
                     # print("Receiver attempting to pause the transmitter")
                     self.xmitter.pause(int(line[1]))
                 elif 'u' == line[0] or 'd' == line[0]:
-                    global mem_buttons
-                    global recording
-                    if None is not recording:
-                        mem_buttons[active_memory].key_input(line[0], line[2])
+                   global recording_button
+                    if None is not recording_button:
+                        recording_button.key_input(line[0], line[2])
                 else:
                     print("Received the line '%s'" % line)
 
